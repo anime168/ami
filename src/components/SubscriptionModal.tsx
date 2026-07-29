@@ -1,82 +1,68 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   X,
-  QrCode,
-  Send,
-  CheckCircle2,
   Crown,
-  Hash,
-  Calendar,
-  Upload,
+  Clock,
+  QrCode,
   Download,
-  Plus,
-  Minus,
-  DollarSign,
-  Percent,
-  FileText,
+  Upload,
+  CheckCircle2,
   Loader2,
   RefreshCw,
-  Smartphone,
   Zap,
   ShieldCheck,
   Sparkles,
+  Calendar,
+  DollarSign,
+  Hash,
+  FileText,
+  Percent,
+  Plus,
+  Minus,
 } from 'lucide-react';
-import { supabase } from '../lib/supabaseClient';
-import { COLORS, latinFont, khmerFont } from '../lib/theme';
-import { prepareImageForUpload, UploadValidationError } from '../lib/uploadImage';
+import { supabase } from '@/lib/supabase/supabaseClient';
 
-type PlanKey = '1m' | '2m' | '3m' | '6m' | '12m';
+type PlanKey = '1m' | '2m' | '6m' | '1y';
 
 const PLANS: {
   key: PlanKey;
   months: number;
   price: number;
-  originalPrice: number;
-  labelKh: string;
-  labelEn: string;
+  label: string;
   tag?: string;
 }[] = [
-  { key: '1m', months: 1, price: 2, originalPrice: 3, labelKh: '១ ខែ', labelEn: '1 Month' },
-  { key: '2m', months: 2, price: 4, originalPrice: 6, labelKh: '២ ខែ', labelEn: '2 Months' },
-  { key: '3m', months: 3, price: 7, originalPrice: 9, labelKh: '៣ ខែ', labelEn: '3 Months', tag: 'សន្សំបាន' },
-  { key: '6m', months: 6, price: 15, originalPrice: 18, labelKh: '៦ ខែ', labelEn: '6 Months' },
-  { key: '12m', months: 12, price: 28, originalPrice: 36, labelKh: '១២ ខែ', labelEn: '12 Months', tag: 'ពេញនិយមបំផុត' },
+  { key: '1m', months: 1, price: 2, label: '1 Month' },
+  { key: '2m', months: 2, price: 4, label: '2 Months' },
+  { key: '6m', months: 6, price: 7, label: '6 Months', tag: 'Popular' },
+  { key: '1y', months: 12, price: 28, label: '12 Months', tag: 'Best Value' },
 ];
 
 const PLAN_QR: Record<PlanKey, string> = {
-  '1m': '/qr/subscription-1m.png',
-  '2m': '/qr/subscription-2m.png',
-  '3m': '/qr/subscription-3m.png',
-  '6m': '/qr/subscription-6m.png',
-  '12m': '/qr/subscription-12m.png',
+  '1m': '/assets/images/subscription-1m.png',
+  '2m': '/assets/images/subscription-1m.png',
+  '6m': '/assets/images/subscription-1m.png',
+  '1y': '/assets/images/subscription-1y.png',
 };
 
-interface Profile {
-  is_vip?: boolean | null;
-  vip_expires_at?: string | null;
-}
-
 interface Props {
-  lang: 'KH' | 'EN';
-  profile: Profile;
   onClose: () => void;
-  onOpenTelegram: () => void;
 }
 
 type PayMode = 'auto' | 'manual';
 type AutoStatus = 'idle' | 'loading' | 'waiting' | 'confirmed' | 'expired' | 'error';
 
-export default function SubscriptionModal({ lang, profile, onClose, onOpenTelegram }: Props) {
-  const tr = (kh: string, en: string) => (lang === 'KH' ? kh : en);
-  const [selected, setSelected] = useState<PlanKey>('12m');
-  const [payMode, setPayMode] = useState<PayMode>('auto');
+export default function SubscriptionModal({ onClose }: Props) {
+  const [selected, setSelected] = useState<PlanKey>('1y');
+  const [payMode, setPayMode] = useState<PayMode>('manual');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [submitted, setSubmitted] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
 
   const [transactionId, setTransactionId] = useState('');
-  const [paymentDate, setPaymentDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [paymentDate, setPaymentDate] = useState(() =>
+    new Date().toISOString().slice(0, 10),
+  );
   const [amountPaid, setAmountPaid] = useState('');
   const [discount, setDiscount] = useState('0');
   const [description, setDescription] = useState('');
@@ -85,7 +71,11 @@ export default function SubscriptionModal({ lang, profile, onClose, onOpenTelegr
   const proofInputRef = useRef<HTMLInputElement>(null);
 
   const [autoStatus, setAutoStatus] = useState<AutoStatus>('idle');
-  const [autoQr, setAutoQr] = useState<{ requestId: string; qrImage: string; abapayDeeplink?: string } | null>(null);
+  const [autoQr, setAutoQr] = useState<{
+    requestId: string;
+    qrImage: string;
+    abapayDeeplink?: string;
+  } | null>(null);
   const [autoError, setAutoError] = useState('');
   const [secondsLeft, setSecondsLeft] = useState(0);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -97,7 +87,6 @@ export default function SubscriptionModal({ lang, profile, onClose, onOpenTelegr
   };
 
   useEffect(() => stopTimers, []);
-
   useEffect(() => {
     stopTimers();
     setAutoStatus('idle');
@@ -108,7 +97,9 @@ export default function SubscriptionModal({ lang, profile, onClose, onOpenTelegr
   const startPolling = (requestId: string) => {
     if (pollRef.current) clearInterval(pollRef.current);
     pollRef.current = setInterval(async () => {
-      const { data } = await supabase.functions.invoke('check-qr-status', { body: { requestId } });
+      const { data } = await supabase.functions.invoke('check-qr-status', {
+        body: { requestId },
+      });
       if (data?.status === 'confirmed') {
         stopTimers();
         setAutoStatus('confirmed');
@@ -128,10 +119,16 @@ export default function SubscriptionModal({ lang, profile, onClose, onOpenTelegr
     });
     if (error || data?.error) {
       setAutoStatus('error');
-      setAutoError(data?.error || data?.detail || error?.message || 'Something went wrong');
+      setAutoError(
+        data?.error || data?.detail || error?.message || 'Something went wrong',
+      );
       return;
     }
-    setAutoQr({ requestId: data.requestId, qrImage: data.qrImage, abapayDeeplink: data.abapayDeeplink });
+    setAutoQr({
+      requestId: data.requestId,
+      qrImage: data.qrImage,
+      abapayDeeplink: data.abapayDeeplink,
+    });
     setSecondsLeft(data.expiresInSeconds || 900);
     setAutoStatus('waiting');
     startPolling(data.requestId);
@@ -148,10 +145,12 @@ export default function SubscriptionModal({ lang, profile, onClose, onOpenTelegr
     }, 1000);
   };
 
-  const formatCountdown = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+  const formatCountdown = (s: number) =>
+    `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 
   const selectedPlan = PLANS.find((p) => p.key === selected)!;
-  const effectiveAmount = amountPaid.trim() === '' ? selectedPlan.price : parseFloat(amountPaid) || 0;
+  const effectiveAmount =
+    amountPaid.trim() === '' ? selectedPlan.price : parseFloat(amountPaid) || 0;
   const discountVal = parseFloat(discount) || 0;
   const finalAmount = Math.max(effectiveAmount - discountVal, 0);
 
@@ -163,28 +162,24 @@ export default function SubscriptionModal({ lang, profile, onClose, onOpenTelegr
   const handleProofUpload = async (rawFile: File) => {
     setProofUploading(true);
     setError('');
-    let file: File;
-    try {
-      file = await prepareImageForUpload(rawFile);
-    } catch (e) {
-      setProofUploading(false);
-      setError(e instanceof UploadValidationError ? e.message : tr('រូបភាពមិនត្រឹមត្រូវ', 'Invalid image'));
-      return;
-    }
     const { data: userData } = await supabase.auth.getUser();
     if (!userData.user) {
       setProofUploading(false);
       return;
     }
-    const ext = file.name.split('.').pop() || 'jpg';
+    const ext = rawFile.name.split('.').pop() || 'jpg';
     const path = `subscription-proofs/${userData.user.id}-${Date.now()}.${ext}`;
-    const { error: uploadError } = await supabase.storage.from('qr-codes').upload(path, file, { upsert: true });
+    const { error: uploadError } = await supabase.storage
+      .from('avatars')
+      .upload(path, rawFile, { upsert: true });
     if (uploadError) {
       setProofUploading(false);
       setError(uploadError.message);
       return;
     }
-    const { data: pubData } = supabase.storage.from('qr-codes').getPublicUrl(path);
+    const { data: pubData } = supabase.storage
+      .from('avatars')
+      .getPublicUrl(path);
     setProofUrl(pubData.publicUrl);
     setProofUploading(false);
     setShowDetails(true);
@@ -193,7 +188,7 @@ export default function SubscriptionModal({ lang, profile, onClose, onOpenTelegr
   const handleSaveQr = () => {
     const a = document.createElement('a');
     a.href = PLAN_QR[selected];
-    a.download = `kh-invoice-payment-qr-${selected}.png`;
+    a.download = `nint-anime-payment-qr-${selected}.png`;
     document.body.appendChild(a);
     a.click();
     a.remove();
@@ -203,16 +198,18 @@ export default function SubscriptionModal({ lang, profile, onClose, onOpenTelegr
     setError('');
     setBusy(true);
     const { data: userData } = await supabase.auth.getUser();
-    const { error: insertError } = await supabase.from('subscription_requests').insert({
-      user_id: userData.user?.id,
-      plan: selectedPlan.key,
-      amount: finalAmount,
-      discount: discountVal,
-      description: description.trim() || null,
-      transaction_id: transactionId.trim() || null,
-      payment_date: paymentDate,
-      proof_url: proofUrl,
-    });
+    const { error: insertError } = await supabase
+      .from('subscription_requests')
+      .insert({
+        user_id: userData.user?.id,
+        plan: selectedPlan.key,
+        amount: finalAmount,
+        discount: discountVal,
+        description: description.trim() || null,
+        transaction_id: transactionId.trim() || null,
+        payment_date: paymentDate,
+        proof_url: proofUrl,
+      });
     setBusy(false);
     if (insertError) {
       setError(insertError.message);
@@ -223,43 +220,40 @@ export default function SubscriptionModal({ lang, profile, onClose, onOpenTelegr
 
   return (
     <div
-      className="fixed inset-0 flex items-center justify-center z-50 p-4 animate-[fadeIn_0.2s_ease-out]"
-      style={{ backgroundColor: 'rgba(12,24,38,0.65)', backdropFilter: 'blur(4px)' }}
+      className="fixed inset-0 z-[90] flex items-center justify-center p-4"
+      style={{ backgroundColor: 'rgba(10,10,15,0.8)', backdropFilter: 'blur(6px)' }}
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-3xl w-full max-w-sm max-h-[92vh] overflow-y-auto shadow-2xl animate-[slideUp_0.3s_ease-out]"
-        style={{ boxShadow: '0 20px 60px rgba(12,68,124,0.25)' }}
+        className="w-full max-w-sm max-h-[92vh] overflow-y-auto rounded-3xl border border-white/10 bg-[#14141C] text-white shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
         <div
-          className="px-5 pt-5 pb-5 rounded-t-3xl relative overflow-hidden"
-          style={{ background: `linear-gradient(135deg, ${COLORS.navy} 0%, #185FA5 60%, #2478C8 100%)` }}
+          className="relative overflow-hidden rounded-t-3xl px-5 pb-5 pt-5"
+          style={{
+            background:
+              'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)',
+          }}
         >
-          <div
-            className="absolute rounded-full"
-            style={{ width: 120, height: 120, top: -40, right: -30, background: 'rgba(255,255,255,0.08)' }}
-          />
-          <div
-            className="absolute rounded-full"
-            style={{ width: 80, height: 80, bottom: -30, left: -20, background: 'rgba(255,255,255,0.06)' }}
-          />
-          <button onClick={onClose} className="absolute top-4 right-4 z-10">
-            <X size={20} color="#FFFFFF" strokeWidth={2} />
+          <div className="absolute -right-8 -top-10 h-32 w-32 rounded-full bg-[#FF4D5E]/10 blur-2xl" />
+          <button
+            onClick={onClose}
+            className="absolute right-4 top-4 z-10 text-white/60 transition hover:text-white"
+          >
+            <X size={20} />
           </button>
-          <div className="flex flex-col items-center text-center pt-1 relative">
-            <div
-              className="w-12 h-12 rounded-2xl flex items-center justify-center mb-2"
-              style={{ backgroundColor: 'rgba(255,255,255,0.18)', boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }}
-            >
-              <Crown size={24} color="#F2B84B" strokeWidth={2} />
+          <div className="relative flex flex-col items-center pt-1 text-center">
+            <div className="mb-2 flex h-12 w-12 items-center justify-center rounded-2xl bg-white/10">
+              <Crown size={24} className="text-[#FFD23F]" />
             </div>
-            <p className="text-white font-extrabold text-base tracking-wide">{tr('គម្រោងសមាជិកភាព', 'Subscription Plans')}</p>
-            <div className="flex items-center gap-1.5 mt-1.5">
-              <Crown size={12} color="rgba(255,255,255,0.75)" strokeWidth={2} />
-              <p className="text-white/75 text-[11px]">
-                {tr('ជ្រើសរើសគម្រោងខាងក្រោមដើម្បីបើកប្រើ', 'Choose a plan below to unlock access')}
+            <p className="text-base font-extrabold tracking-wide">
+              Subscription Plans
+            </p>
+            <div className="mt-1.5 flex items-center gap-1.5">
+              <Clock size={12} className="text-white/60" />
+              <p className="text-[11px] text-white/60">
+                Subscribe to unlock every episode
               </p>
             </div>
           </div>
@@ -269,10 +263,9 @@ export default function SubscriptionModal({ lang, profile, onClose, onOpenTelegr
           {!submitted ? (
             <>
               {/* Plan cards */}
-              <div className="grid grid-cols-3 gap-2 mb-4">
+              <div className="mb-4 grid grid-cols-2 gap-2">
                 {PLANS.map((p) => {
                   const isSelected = selected === p.key;
-                  const pct = Math.round((1 - p.price / p.originalPrice) * 100);
                   return (
                     <button
                       key={p.key}
@@ -280,238 +273,207 @@ export default function SubscriptionModal({ lang, profile, onClose, onOpenTelegr
                         setSelected(p.key);
                         setShowDetails(false);
                       }}
-                      className="relative rounded-2xl border-2 p-2.5 text-center transition-all duration-200"
-                      style={{
-                        borderColor: isSelected ? COLORS.navy : COLORS.border,
-                        backgroundColor: isSelected ? COLORS.navyTint : '#FFFFFF',
-                        boxShadow: isSelected ? '0 4px 12px rgba(12,68,124,0.15)' : 'none',
-                        transform: isSelected ? 'translateY(-1px)' : 'none',
-                      }}
+                      className={`relative rounded-2xl border-2 p-2.5 text-center transition-all duration-200 ${
+                        isSelected
+                          ? '-translate-y-0.5 border-[#FF4D5E] bg-[#FF4D5E]/10'
+                          : 'border-white/10 bg-white/[0.02]'
+                      }`}
                     >
                       {p.tag && (
-                        <span
-                          className="absolute -top-2 left-1/2 -translate-x-1/2 text-[8px] font-bold px-1.5 py-0.5 rounded-full text-white whitespace-nowrap flex items-center gap-0.5"
-                          style={{ backgroundColor: COLORS.accentGoldDark, boxShadow: '0 2px 6px rgba(201,143,31,0.3)' }}
-                        >
-                          <Sparkles size={7} color="#FFFFFF" strokeWidth={2.5} />
+                        <span className="absolute -top-2 left-1/2 flex -translate-x-1/2 items-center gap-0.5 whitespace-nowrap rounded-full bg-[#FFD23F] px-1.5 py-0.5 text-[8px] font-bold text-black">
+                          <Sparkles size={7} />
                           {p.tag}
                         </span>
                       )}
-                      <p className="text-[11px] font-semibold mt-1" style={{ color: COLORS.navy }}>
-                        {lang === 'KH' ? p.labelKh : p.labelEn}
+                      <p className="mt-1 text-[11px] font-semibold text-white">
+                        {p.label}
                       </p>
-                      <p className="text-[10px] line-through" style={{ color: COLORS.muted, ...latinFont }}>
-                        ${p.originalPrice}
-                      </p>
-                      <p className="text-lg font-extrabold mt-0.5" style={{ color: COLORS.navy, ...latinFont }}>
+                      <p className="mt-0.5 text-lg font-extrabold text-[#FF4D5E]">
                         ${p.price}
                       </p>
-                      <span
-                        className="inline-block mt-0.5 text-[8px] font-bold px-1.5 py-0.5 rounded-full"
-                        style={{ backgroundColor: COLORS.dangerTint, color: COLORS.danger }}
-                      >
-                        -{pct}%
-                      </span>
+                      <p className="text-[10px] text-white/40">
+                        ${(p.price / p.months).toFixed(2)}/mo
+                      </p>
                     </button>
                   );
                 })}
               </div>
 
               {/* Payment mode tabs */}
-              <div className="flex gap-1.5 mb-3 p-1 rounded-xl" style={{ backgroundColor: COLORS.bgApp }}>
+              <div className="mb-3 flex gap-1.5 rounded-xl bg-white/[0.04] p-1">
                 <button
                   onClick={() => setPayMode('auto')}
-                  className="flex-1 py-2.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all duration-200"
-                  style={{
-                    backgroundColor: payMode === 'auto' ? COLORS.navy : 'transparent',
-                    color: payMode === 'auto' ? '#FFFFFF' : COLORS.muted,
-                    boxShadow: payMode === 'auto' ? '0 2px 8px rgba(12,68,124,0.2)' : 'none',
-                  }}
+                  className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg py-2.5 text-xs font-bold transition-all ${
+                    payMode === 'auto'
+                      ? 'bg-[#FF4D5E] text-white'
+                      : 'text-white/50'
+                  }`}
                 >
-                  <Zap size={13} color={payMode === 'auto' ? '#F2B84B' : COLORS.muted} strokeWidth={2.5} />
-                  {tr('ទូទាត់ស្វ័យប្រវត្តិ', 'Auto Pay')}
+                  <Zap
+                    size={13}
+                    className={payMode === 'auto' ? 'text-[#FFD23F]' : ''}
+                  />
+                  Auto Pay
                 </button>
                 <button
                   onClick={() => setPayMode('manual')}
-                  className="flex-1 py-2.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all duration-200"
-                  style={{
-                    backgroundColor: payMode === 'manual' ? COLORS.navy : 'transparent',
-                    color: payMode === 'manual' ? '#FFFFFF' : COLORS.muted,
-                    boxShadow: payMode === 'manual' ? '0 2px 8px rgba(12,68,124,0.2)' : 'none',
-                  }}
+                  className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg py-2.5 text-xs font-bold transition-all ${
+                    payMode === 'manual'
+                      ? 'bg-[#FF4D5E] text-white'
+                      : 'text-white/50'
+                  }`}
                 >
-                  <QrCode size={13} color={payMode === 'manual' ? '#FFFFFF' : COLORS.muted} strokeWidth={2.5} />
-                  {tr('ទូទាត់ដោយដៃ', 'Manual')}
+                  <QrCode size={13} />
+                  Manual
                 </button>
               </div>
 
-              {/* Amount summary bar */}
-              <div
-                className="flex items-center justify-between px-4 py-3 rounded-2xl mb-3"
-                style={{ backgroundColor: COLORS.navyTint, border: `1px solid ${COLORS.navy}20` }}
-              >
+              {/* Amount summary */}
+              <div className="mb-3 flex items-center justify-between rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3">
                 <div className="flex items-center gap-2">
-                  <div
-                    className="w-8 h-8 rounded-xl flex items-center justify-center"
-                    style={{ backgroundColor: COLORS.navy }}
-                  >
-                    <DollarSign size={15} color="#FFFFFF" strokeWidth={2.5} />
+                  <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#FF4D5E]">
+                    <DollarSign size={15} className="text-white" />
                   </div>
                   <div>
-                    <p className="text-[10px] font-semibold" style={{ color: COLORS.muted }}>
-                      {tr('តម្លៃ', 'Amount')}
+                    <p className="text-[10px] font-semibold text-white/50">
+                      Amount
                     </p>
-                    <p className="text-[10px]" style={{ color: COLORS.muted }}>
-                      {lang === 'KH' ? selectedPlan.labelKh : selectedPlan.labelEn}
+                    <p className="text-[10px] text-white/50">
+                      {selectedPlan.label}
                     </p>
                   </div>
                 </div>
-                <p className="text-2xl font-extrabold" style={{ color: COLORS.navy, ...latinFont }}>
+                <p className="text-2xl font-extrabold text-[#FF4D5E]">
                   ${selectedPlan.price}
                 </p>
               </div>
 
-              {/* AUTO PAY MODE */}
+              {/* AUTO PAY */}
               {payMode === 'auto' && (
-                <div
-                  className="rounded-2xl border p-4 mb-3 animate-[fadeIn_0.25s_ease-out]"
-                  style={{ borderColor: COLORS.border, backgroundColor: '#FFFFFF' }}
-                >
-                  <div className="flex items-center justify-center gap-1.5 mb-3">
-                    <div
-                      className="w-6 h-6 rounded-full flex items-center justify-center"
-                      style={{ backgroundColor: COLORS.successTint }}
-                    >
-                      <ShieldCheck size={13} color={COLORS.success} strokeWidth={2.5} />
+                <div className="mb-3 rounded-2xl border border-white/10 bg-white/[0.02] p-4">
+                  <div className="mb-3 flex items-center justify-center gap-1.5">
+                    <div className="flex h-6 w-6 items-center justify-center rounded-full bg-[#22C55E]/15">
+                      <ShieldCheck size={13} className="text-[#22C55E]" />
                     </div>
-                    <p className="text-[11px] font-bold" style={{ color: COLORS.navy }}>
-                      {tr('ស្កេនទូទាត់ស្វ័យប្រវត្តិ', 'Scan to Pay Automatically')}
+                    <p className="text-[11px] font-bold text-white">
+                      Scan to Pay Automatically
                     </p>
                   </div>
 
                   {autoStatus === 'idle' && (
                     <div className="text-center">
-                      <p className="text-[10px] mb-3 leading-relaxed" style={{ color: COLORS.muted }}>
-                        {tr(
-                          'បង្កើត QR កាត់មួយដង ហើយប្រព័ន្ធ​នឹងផ្ទៀងផ្ទាត់ការទូទាត់ដោយស្វ័យប្រវត្តិ។',
-                          'Generate a one-time QR and the system will auto-confirm your payment.'
-                        )}
+                      <p className="mb-3 text-[10px] leading-relaxed text-white/50">
+                        Generate a one-time QR and the system will auto-confirm
+                        your payment.
                       </p>
                       <button
                         onClick={handleGenerateAutoQr}
-                        className="w-full py-3 rounded-xl font-bold text-white text-xs flex items-center justify-center gap-1.5 transition-all duration-200 hover:opacity-90"
-                        style={{ backgroundColor: COLORS.navy, boxShadow: '0 4px 12px rgba(12,68,124,0.2)' }}
+                        className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-[#FF4D5E] py-3 text-xs font-bold text-white transition hover:bg-[#E63946]"
                       >
-                        <Zap size={14} color="#F2B84B" strokeWidth={2.5} />
-                        {tr('បង្កើត QR ទូទាត់', 'Generate Payment QR')}
+                        <Zap size={14} className="text-[#FFD23F]" />
+                        Generate Payment QR
                       </button>
                     </div>
                   )}
 
                   {autoStatus === 'loading' && (
-                    <div className="w-40 h-40 mx-auto rounded-2xl border-2 border-dashed flex flex-col items-center justify-center gap-2" style={{ borderColor: COLORS.border }}>
-                      <Loader2 size={28} color={COLORS.navy} strokeWidth={2} className="animate-spin" />
-                      <p className="text-[10px]" style={{ color: COLORS.muted }}>{tr('កំពុងបង្កើត QR...', 'Generating QR...')}</p>
+                    <div className="mx-auto flex h-40 w-40 flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-white/10">
+                      <Loader2 size={28} className="animate-spin text-[#FF4D5E]" />
+                      <p className="text-[10px] text-white/50">
+                        Generating QR...
+                      </p>
                     </div>
                   )}
 
                   {autoStatus === 'waiting' && autoQr && (
                     <>
-                      <div className="flex justify-center mb-3">
+                      <div className="mb-3 flex justify-center">
                         <div className="relative">
                           <img
                             src={autoQr.qrImage}
-                            alt="ABA KHQR Payment"
-                            className="w-44 h-44 rounded-2xl border-2 bg-white object-contain p-2"
-                            style={{ borderColor: COLORS.navy + '30' }}
+                            alt="Payment QR"
+                            className="h-44 w-44 rounded-2xl border-2 border-[#FF4D5E]/30 bg-white p-2 object-contain"
                           />
-                          <div
-                            className="absolute -inset-1 rounded-2xl pointer-events-none animate-pulse"
-                            style={{ border: `2px solid ${COLORS.navy}40` }}
-                          />
+                          <div className="absolute -inset-1 animate-pulse rounded-2xl border-2 border-[#FF4D5E]/30" />
                         </div>
                       </div>
-                      <div className="flex items-center justify-center gap-1.5 mb-2">
-                        <Loader2 size={12} color={COLORS.navy} strokeWidth={2.5} className="animate-spin" />
-                        <p className="text-[10px] font-semibold" style={{ color: COLORS.navy }}>
-                          {tr(`កំពុងរង់ចាំការទូទាត់... (${formatCountdown(secondsLeft)})`, `Waiting for payment... (${formatCountdown(secondsLeft)})`)}
+                      <div className="mb-2 flex items-center justify-center gap-1.5">
+                        <Loader2
+                          size={12}
+                          className="animate-spin text-[#FF4D5E]"
+                        />
+                        <p className="text-[10px] font-semibold text-white">
+                          Waiting for payment... ({formatCountdown(secondsLeft)})
                         </p>
                       </div>
                       {autoQr.abapayDeeplink && (
                         <a
                           href={autoQr.abapayDeeplink}
-                          className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-lg border text-[11px] font-semibold transition-all hover:bg-gray-50"
-                          style={{ borderColor: COLORS.border, color: COLORS.navy }}
+                          className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-white/10 py-2.5 text-[11px] font-semibold text-white transition hover:bg-white/5"
                         >
-                          <Smartphone size={13} color={COLORS.navy} strokeWidth={2} />
-                          {tr('បើក App ABA Mobile', 'Open ABA Mobile App')}
+                          Open Banking App
                         </a>
                       )}
                     </>
                   )}
 
                   {autoStatus === 'expired' && (
-                    <div className="text-center py-2">
-                      <p className="text-[11px] mb-3" style={{ color: COLORS.danger }}>
-                        {tr('QR បានផុតកំណត់ពេលហើយ', 'This QR code has expired')}
+                    <div className="py-2 text-center">
+                      <p className="mb-3 text-[11px] text-[#EF4444]">
+                        This QR code has expired
                       </p>
                       <button
                         onClick={handleGenerateAutoQr}
-                        className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl font-bold text-white text-xs transition-all hover:opacity-90"
-                        style={{ backgroundColor: COLORS.navy }}
+                        className="inline-flex items-center gap-1.5 rounded-xl bg-[#FF4D5E] px-4 py-2.5 text-xs font-bold text-white transition hover:bg-[#E63946]"
                       >
-                        <RefreshCw size={13} color="#FFFFFF" strokeWidth={2.5} />
-                        {tr('បង្កើត QR ថ្មី', 'Generate New QR')}
+                        <RefreshCw size={13} />
+                        Generate New QR
                       </button>
                     </div>
                   )}
 
                   {autoStatus === 'error' && (
-                    <div className="text-center py-2">
-                      <p className="text-[11px] mb-3 leading-relaxed" style={{ color: COLORS.danger }}>{autoError}</p>
+                    <div className="py-2 text-center">
+                      <p className="mb-3 text-[11px] text-[#EF4444]">
+                        {autoError}
+                      </p>
                       <button
                         onClick={handleGenerateAutoQr}
-                        className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl font-bold text-white text-xs transition-all hover:opacity-90"
-                        style={{ backgroundColor: COLORS.navy }}
+                        className="inline-flex items-center gap-1.5 rounded-xl bg-[#FF4D5E] px-4 py-2.5 text-xs font-bold text-white transition hover:bg-[#E63946]"
                       >
-                        <RefreshCw size={13} color="#FFFFFF" strokeWidth={2.5} />
-                        {tr('ព្យាយាមម្តងទៀត', 'Try Again')}
+                        <RefreshCw size={13} />
+                        Try Again
                       </button>
                     </div>
                   )}
                 </div>
               )}
 
-              {/* MANUAL PAY MODE */}
+              {/* MANUAL PAY */}
               {payMode === 'manual' && (
-                <div
-                  className="rounded-2xl border p-4 mb-3 animate-[fadeIn_0.25s_ease-out]"
-                  style={{ borderColor: COLORS.border, backgroundColor: COLORS.bgApp }}
-                >
-                  <div className="flex items-center gap-1.5 mb-3 justify-center">
-                    <QrCode size={14} color={COLORS.navy} strokeWidth={2} />
-                    <p className="text-[11px] font-bold" style={{ color: COLORS.navy }}>
-                      {tr('ស្កេនទូទាត់', 'Scan to Pay')}
+                <div className="mb-3 rounded-2xl border border-white/10 bg-white/[0.02] p-4">
+                  <div className="mb-3 flex items-center justify-center gap-1.5">
+                    <QrCode size={14} className="text-[#FF4D5E]" />
+                    <p className="text-[11px] font-bold text-white">
+                      Scan to Pay
                     </p>
                   </div>
-                  <div className="flex justify-center mb-3">
+                  <div className="mb-3 flex justify-center">
                     <img
                       key={selected}
                       src={PLAN_QR[selected]}
                       alt="Payment QR"
-                      className="w-40 h-40 rounded-2xl border-2 bg-white object-contain p-2"
-                      style={{ borderColor: COLORS.navy + '30' }}
+                      className="h-40 w-40 rounded-2xl border-2 border-[#FF4D5E]/30 bg-white p-2 object-contain"
                     />
                   </div>
 
-                  <div className="grid grid-cols-2 gap-2 mb-1.5">
+                  <div className="mb-1.5 grid grid-cols-2 gap-2">
                     <button
                       onClick={handleSaveQr}
-                      className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl border text-[11px] font-semibold transition-all hover:bg-gray-50"
-                      style={{ borderColor: COLORS.border, color: COLORS.navy, backgroundColor: '#FFFFFF' }}
+                      className="flex items-center justify-center gap-1.5 rounded-xl border border-white/10 py-2.5 text-[11px] font-semibold text-white transition hover:bg-white/5"
                     >
-                      <Download size={13} color={COLORS.navy} strokeWidth={2} />
-                      {tr('រក្សាទុក QR', 'Save QR')}
+                      <Download size={13} />
+                      Save QR
                     </button>
                     <input
                       ref={proofInputRef}
@@ -527,150 +489,136 @@ export default function SubscriptionModal({ lang, profile, onClose, onOpenTelegr
                     <button
                       onClick={() => proofInputRef.current?.click()}
                       disabled={proofUploading}
-                      className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-[11px] font-semibold text-white transition-all hover:opacity-90 disabled:opacity-60"
-                      style={{ backgroundColor: proofUrl ? COLORS.success : COLORS.navy }}
+                      className="flex items-center justify-center gap-1.5 rounded-xl py-2.5 text-[11px] font-semibold text-white transition hover:opacity-90 disabled:opacity-60"
+                      style={{
+                        backgroundColor: proofUrl
+                          ? '#22C55E'
+                          : '#FF4D5E',
+                      }}
                     >
                       {proofUploading ? (
-                        tr('កំពុងផ្ទុក...', 'Uploading...')
+                        'Uploading...'
                       ) : proofUrl ? (
                         <>
-                          <CheckCircle2 size={13} color="#FFFFFF" strokeWidth={2} />
-                          {tr('បានផ្ទៀងផ្ទាត់', 'Verified')}
+                          <CheckCircle2 size={13} />
+                          Verified
                         </>
                       ) : (
                         <>
-                          <Upload size={13} color="#FFFFFF" strokeWidth={2} />
-                          {tr('ផ្ទុករូបភាពបញ្ជាក់', 'Upload Proof')}
+                          <Upload size={13} />
+                          Upload Proof
                         </>
                       )}
                     </button>
                   </div>
 
-                  <button
-                    onClick={onOpenTelegram}
-                    className="w-full flex items-center justify-center gap-1 py-1.5 text-[10px] font-medium underline"
-                    style={{ color: COLORS.muted }}
-                  >
-                    <Send size={11} color={COLORS.muted} strokeWidth={2} />
-                    {tr('ជំនួយ Telegram', 'Help: Telegram')}
-                  </button>
-
-                  <div className="mt-2 rounded-xl border overflow-hidden" style={{ borderColor: COLORS.border, backgroundColor: '#FFFFFF' }}>
+                  {/* Payment details accordion */}
+                  <div className="mt-2 overflow-hidden rounded-xl border border-white/10">
                     <button
-                      onClick={() => (showDetails ? setShowDetails(false) : openDetails())}
-                      className="w-full flex items-center justify-between px-3 py-2.5"
+                      onClick={() =>
+                        showDetails ? setShowDetails(false) : openDetails()
+                      }
+                      className="flex w-full items-center justify-between px-3 py-2.5"
                     >
-                      <span className="text-[11px] font-bold" style={{ color: COLORS.navy }}>
-                        {tr('លម្អិតការទូទាត់', 'Payment details')}
+                      <span className="text-[11px] font-bold text-white">
+                        Payment details
                       </span>
-                      <span
-                        className="w-6 h-6 rounded-full flex items-center justify-center"
-                        style={{ backgroundColor: COLORS.navyTint }}
-                      >
+                      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white/5">
                         {showDetails ? (
-                          <Minus size={14} color={COLORS.navy} strokeWidth={2.5} />
+                          <Minus size={14} className="text-white" />
                         ) : (
-                          <Plus size={14} color={COLORS.navy} strokeWidth={2.5} />
+                          <Plus size={14} className="text-white" />
                         )}
                       </span>
                     </button>
 
                     {showDetails && (
-                      <div className="px-3 pb-3 space-y-2.5" style={{ borderTop: `1px solid ${COLORS.border}` }}>
+                      <div
+                        className="space-y-2.5 px-3 pb-3"
+                        style={{ borderTop: '1px solid rgba(255,255,255,0.08)' }}
+                      >
                         <div className="pt-2.5">
-                          <label className="text-[11px] font-semibold flex items-center gap-1 mb-1" style={{ color: COLORS.navy }}>
-                            <Calendar size={12} color={COLORS.navy} strokeWidth={2} />
-                            {tr('ថ្ងៃទីបានទូទាត់', 'Payment date')}
+                          <label className="mb-1 flex items-center gap-1 text-[11px] font-semibold text-white/70">
+                            <Calendar size={12} /> Payment date
                           </label>
                           <input
                             type="date"
                             value={paymentDate}
                             onChange={(e) => setPaymentDate(e.target.value)}
-                            className="w-full rounded-lg border px-2.5 py-2 text-xs outline-none"
-                            style={{ borderColor: COLORS.border, color: COLORS.navy }}
+                            className="w-full rounded-lg border border-white/10 bg-white/5 px-2.5 py-2 text-xs text-white outline-none"
                           />
                         </div>
-
                         <div className="grid grid-cols-2 gap-2">
                           <div>
-                            <label className="text-[11px] font-semibold flex items-center gap-1 mb-1" style={{ color: COLORS.navy }}>
-                              <DollarSign size={12} color={COLORS.navy} strokeWidth={2} />
-                              {tr('ចំនួនបានបង់', 'Amount paid')}
+                            <label className="mb-1 flex items-center gap-1 text-[11px] font-semibold text-white/70">
+                              <DollarSign size={12} /> Amount paid
                             </label>
                             <input
                               type="number"
                               step="0.01"
                               value={amountPaid}
                               onChange={(e) => setAmountPaid(e.target.value)}
-                              className="w-full rounded-lg border px-2.5 py-2 text-xs outline-none"
-                              style={{ borderColor: COLORS.border, color: COLORS.navy, ...latinFont }}
+                              className="w-full rounded-lg border border-white/10 bg-white/5 px-2.5 py-2 text-xs text-white outline-none"
                             />
                           </div>
                           <div>
-                            <label className="text-[11px] font-semibold flex items-center gap-1 mb-1" style={{ color: COLORS.navy }}>
-                              <Percent size={12} color={COLORS.navy} strokeWidth={2} />
-                              {tr('បញ្ចុះតម្លៃ', 'Discount')}
+                            <label className="mb-1 flex items-center gap-1 text-[11px] font-semibold text-white/70">
+                              <Percent size={12} /> Discount
                             </label>
                             <input
                               type="number"
                               step="0.01"
                               value={discount}
                               onChange={(e) => setDiscount(e.target.value)}
-                              className="w-full rounded-lg border px-2.5 py-2 text-xs outline-none"
-                              style={{ borderColor: COLORS.border, color: COLORS.navy, ...latinFont }}
+                              className="w-full rounded-lg border border-white/10 bg-white/5 px-2.5 py-2 text-xs text-white outline-none"
                             />
                           </div>
                         </div>
-
                         <div>
-                          <label className="text-[11px] font-semibold flex items-center gap-1 mb-1" style={{ color: COLORS.navy }}>
-                            <FileText size={12} color={COLORS.navy} strokeWidth={2} />
-                            {tr('ចំណាំ', 'Description')}
+                          <label className="mb-1 flex items-center gap-1 text-[11px] font-semibold text-white/70">
+                            <FileText size={12} /> Description
                           </label>
                           <textarea
                             value={description}
                             onChange={(e) => setDescription(e.target.value)}
                             rows={2}
-                            placeholder={tr('ចំណាំបន្ថែម (ស្រេចចិត្ត)', 'Optional note')}
-                            className="w-full rounded-lg border px-2.5 py-2 text-xs outline-none resize-none"
-                            style={{ borderColor: COLORS.border, color: COLORS.navy }}
+                            placeholder="Optional note"
+                            className="w-full resize-none rounded-lg border border-white/10 bg-white/5 px-2.5 py-2 text-xs text-white outline-none"
                           />
                         </div>
-
                         <div>
-                          <label className="text-[11px] font-semibold flex items-center gap-1 mb-1" style={{ color: COLORS.navy }}>
-                            <Hash size={12} color={COLORS.navy} strokeWidth={2} />
-                            {tr('Transaction ID (ស្រេចចិត្ត)', 'Transaction ID (optional)')}
+                          <label className="mb-1 flex items-center gap-1 text-[11px] font-semibold text-white/70">
+                            <Hash size={12} /> Transaction ID (optional)
                           </label>
                           <input
                             value={transactionId}
                             onChange={(e) => setTransactionId(e.target.value)}
-                            placeholder={tr('ចម្លងពី App ABA ក្រោយបង់ប្រាក់', 'Copy from the ABA app after paying')}
-                            className="w-full rounded-lg border px-2.5 py-2 text-xs outline-none"
-                            style={{ borderColor: COLORS.border, color: COLORS.navy, ...latinFont }}
+                            placeholder="Copy from your banking app"
+                            className="w-full rounded-lg border border-white/10 bg-white/5 px-2.5 py-2 text-xs text-white outline-none"
                           />
                         </div>
-
-                        <div className="flex justify-between text-[11px] pt-1" style={{ borderTop: `1px solid ${COLORS.border}` }}>
-                          <span style={{ color: COLORS.muted }}>{tr('សរុបត្រូវបង់', 'Total due')}</span>
-                          <span className="font-extrabold" style={{ color: COLORS.navy, ...latinFont }}>
+                        <div
+                          className="flex justify-between pt-1 text-[11px]"
+                          style={{
+                            borderTop: '1px solid rgba(255,255,255,0.08)',
+                          }}
+                        >
+                          <span className="text-white/50">Total due</span>
+                          <span className="font-extrabold text-[#FF4D5E]">
                             ${finalAmount.toFixed(2)}
                           </span>
                         </div>
-
                         {error && (
-                          <p className="text-xs text-center" style={{ color: COLORS.danger }}>
+                          <p className="text-center text-xs text-[#EF4444]">
                             {error}
                           </p>
                         )}
-
                         <button
                           onClick={handleConfirmPaid}
                           disabled={busy}
-                          className="w-full py-2.5 rounded-xl font-bold text-white text-xs transition-all hover:opacity-90 disabled:opacity-60"
-                          style={{ backgroundColor: COLORS.success }}
+                          className="w-full rounded-xl bg-[#22C55E] py-2.5 text-xs font-bold text-white transition hover:opacity-90 disabled:opacity-60"
                         >
-                          {busy ? tr('កំពុងបញ្ជូន...', 'Sending...') : tr('ខ្ញុំបានទូទាត់រួច', "I've Paid")}
+                          {busy ? 'Sending...' : "I've Paid"}
                         </button>
                       </div>
                     )}
@@ -679,45 +627,38 @@ export default function SubscriptionModal({ lang, profile, onClose, onOpenTelegr
               )}
             </>
           ) : (
-            <div className="text-center py-8 animate-[fadeIn_0.3s_ease-out]">
+            <div className="py-8 text-center">
               <div
-                className="w-16 h-16 rounded-full mx-auto flex items-center justify-center mb-3"
-                style={{ backgroundColor: autoStatus === 'confirmed' ? COLORS.successTint : COLORS.navyTint }}
+                className={`mx-auto mb-3 flex h-16 w-16 items-center justify-center rounded-full ${
+                  autoStatus === 'confirmed'
+                    ? 'bg-[#22C55E]/15'
+                    : 'bg-[#FF4D5E]/15'
+                }`}
               >
-                <CheckCircle2 size={36} color={autoStatus === 'confirmed' ? COLORS.success : COLORS.navy} strokeWidth={1.5} />
+                <CheckCircle2
+                  size={36}
+                  className={
+                    autoStatus === 'confirmed'
+                      ? 'text-[#22C55E]'
+                      : 'text-[#FF4D5E]'
+                  }
+                />
               </div>
-              <p className="text-sm font-bold mt-1" style={{ color: COLORS.navy }}>
+              <p className="mt-1 text-sm font-bold text-white">
                 {autoStatus === 'confirmed'
-                  ? tr('ការទូទាត់បានជោគជ័យ!', 'Payment confirmed!')
-                  : tr('បានទទួលសំណើរបស់អ្នក', 'Request received')}
+                  ? 'Payment confirmed!'
+                  : 'Request received'}
               </p>
-              <p className="text-xs mt-1.5 px-6 leading-relaxed" style={{ color: COLORS.muted }}>
+              <p className="mt-1.5 px-6 text-xs leading-relaxed text-white/50">
                 {autoStatus === 'confirmed'
-                  ? tr(
-                      'PayWay បានបញ្ជាក់ការទូទាត់របស់អ្នកដោយស្វ័យប្រវត្តិ។ គម្រោងសមាជិកភាពរបស់អ្នកបានធ្វើឱ្យសកម្មភ្លាមៗ។',
-                      'PayWay confirmed your payment automatically. Your subscription is active now.'
-                    )
-                  : tr(
-                      'សូមរង់ចាំការផ្ទៀងផ្ទាត់ពី Admin (ជាធម្មតាក្នុងរយៈពេលពីរបីម៉ោង)។ ជូនដំណឹង Telegram ដើម្បីលឿនជាង។',
-                      'Please wait for admin verification (usually within a few hours). Notify via Telegram for faster confirmation.'
-                    )}
+                  ? 'Your subscription is now active. Enjoy unlimited streaming!'
+                  : 'Please wait for admin verification (usually within a few hours).'}
               </p>
-              {autoStatus !== 'confirmed' && (
-                <button
-                  onClick={onOpenTelegram}
-                  className="mt-4 mr-2 px-4 py-2 rounded-xl font-bold text-xs border inline-flex items-center gap-1.5 transition-all hover:bg-gray-50"
-                  style={{ borderColor: COLORS.border, color: COLORS.navy }}
-                >
-                  <Send size={13} color={COLORS.navy} strokeWidth={2} />
-                  {tr('ជូនដំណឹង Telegram', 'Notify on Telegram')}
-                </button>
-              )}
               <button
                 onClick={onClose}
-                className="mt-4 px-5 py-2 rounded-xl font-bold text-xs text-white transition-all hover:opacity-90"
-                style={{ backgroundColor: COLORS.navy }}
+                className="mt-4 rounded-xl bg-[#FF4D5E] px-5 py-2 text-xs font-bold text-white transition hover:bg-[#E63946]"
               >
-                {tr('បិទ', 'Close')}
+                Close
               </button>
             </div>
           )}
