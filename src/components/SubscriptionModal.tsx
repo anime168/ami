@@ -25,7 +25,7 @@ import { supabase } from '../lib/supabaseClient';
 import { COLORS, latinFont, khmerFont } from '../lib/theme';
 import { prepareImageForUpload, UploadValidationError } from '../lib/uploadImage';
 
-type PlanKey = '1m' | '6m' | '1y';
+type PlanKey = '1m' | '2m' | '3m' | '6m' | '12m';
 
 const PLANS: {
   key: PlanKey;
@@ -36,15 +36,19 @@ const PLANS: {
   labelEn: string;
   tag?: string;
 }[] = [
-  { key: '1m', months: 1, price: 2, originalPrice: 5, labelKh: '១ ខែ', labelEn: '1 Month' },
-  { key: '6m', months: 6, price: 7, originalPrice: 10, labelKh: '៦ ខែ', labelEn: '6 Months' },
-  { key: '1y', months: 12, price: 14, originalPrice: 20, labelKh: '១ ឆ្នាំ', labelEn: '1 Year', tag: 'Best Value' },
+  { key: '1m', months: 1, price: 2, originalPrice: 3, labelKh: '១ ខែ', labelEn: '1 Month' },
+  { key: '2m', months: 2, price: 4, originalPrice: 6, labelKh: '២ ខែ', labelEn: '2 Months' },
+  { key: '3m', months: 3, price: 7, originalPrice: 9, labelKh: '៣ ខែ', labelEn: '3 Months', tag: 'សន្សំបាន' },
+  { key: '6m', months: 6, price: 15, originalPrice: 18, labelKh: '៦ ខែ', labelEn: '6 Months' },
+  { key: '12m', months: 12, price: 28, originalPrice: 36, labelKh: '១២ ខែ', labelEn: '12 Months', tag: 'ពេញនិយមបំផុត' },
 ];
 
 const PLAN_QR: Record<PlanKey, string> = {
   '1m': '/qr/subscription-1m.png',
+  '2m': '/qr/subscription-2m.png',
+  '3m': '/qr/subscription-3m.png',
   '6m': '/qr/subscription-6m.png',
-  '1y': '/qr/subscription-1y.png',
+  '12m': '/qr/subscription-12m.png',
 };
 
 interface Profile {
@@ -64,7 +68,7 @@ type AutoStatus = 'idle' | 'loading' | 'waiting' | 'confirmed' | 'expired' | 'er
 
 export default function SubscriptionModal({ lang, profile, onClose, onOpenTelegram }: Props) {
   const tr = (kh: string, en: string) => (lang === 'KH' ? kh : en);
-  const [selected, setSelected] = useState<PlanKey>('1y');
+  const [selected, setSelected] = useState<PlanKey>('12m');
   const [payMode, setPayMode] = useState<PayMode>('auto');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
